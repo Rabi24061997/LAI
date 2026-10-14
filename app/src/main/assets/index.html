@@ -1,0 +1,399 @@
+<!doctype html><html lang="en"><head></head><body>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Canopy LAI Meter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single field-instrument column — viewfinder, live readout, reading log, method card */
+:root{
+  --bg:#eef2ec; --surface:#ffffff; --fg:#17201a; --muted:#5b685f; --line:#d3dbd2;
+  --accent:#1f7a4c; --sky:#3b7cc0; --warn:#a85d18; --ok:#1f7a4c;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#93a196; --line:#2a352d;
+  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#93a196; --line:#2a352d;
+  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:20px}
+header h1{font-family:var(--display);font-weight:800;font-size:1.9rem;letter-spacing:-.01em;margin:0;text-wrap:balance}
+header p{margin:.25rem 0 0;color:var(--muted);max-width:62ch}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px;min-width:0}
+h2{font-family:var(--display);font-size:1.05rem;font-weight:600;margin:0}
+.view{position:relative;width:100%;max-width:100%;aspect-ratio:3/4;max-height:62vh;margin:0 auto;background:#000;border-radius:6px;overflow:hidden}
+.view video,.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.window{position:absolute;left:35%;top:38.75%;width:30%;height:22.5%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 0 9999px rgba(0,0,0,.28);pointer-events:none}
+.tag{position:absolute;left:10px;top:10px;font-family:var(--mono);font-size:.72rem;background:rgba(0,0,0,.6);color:#fff;padding:3px 8px;border-radius:4px}
+.gauge{display:grid;gap:6px}
+.scale{position:relative;height:28px;border-radius:4px;background:var(--bg);border:1px solid var(--line)}
+.band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 22%,transparent);border-left:1px solid var(--accent);border-right:1px solid var(--accent)}
+.needle{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;background:var(--fg);border-radius:2px;transition:left .08s linear}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.zread{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.zread b{font-family:var(--mono);font-size:1.35rem;font-weight:500;font-variant-numeric:tabular-nums}
+.zread .state{font-size:.82rem;color:var(--muted)}
+.zread .state.on{color:var(--ok);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+button,.btn{font:600 .92rem var(--body);padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:.9rem}
+.row label{display:inline-flex;gap:6px;align-items:center}
+input[type=number]{width:5.5em;font:inherit;font-family:var(--mono);padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
+select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
+.msg{margin:0;font-size:.88rem;color:var(--warn)}
+.msg:empty{display:none}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.stat{background:var(--surface);padding:10px 12px;min-width:0}
+.stat .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:1.3rem;font-variant-numeric:tabular-nums}
+.stat.hero .v{color:var(--accent);font-weight:500}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.maskrow{display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:start}
+@media (max-width:440px){.maskrow{grid-template-columns:1fr}}
+#mask{width:140px;height:140px;border-radius:4px;border:1px solid var(--line);image-rendering:pixelated;background:var(--bg)}
+.legend{font-size:.85rem;color:var(--muted);display:grid;gap:6px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.82rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+td.ex{color:var(--muted);font-style:italic}
+.summary{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:.9rem}
+.summary b{font-family:var(--mono);font-weight:500}
+.method{font-size:.92rem}
+.method p,.method ul{margin:0;max-width:65ch}
+.method ul{padding-left:1.2em;display:grid;gap:4px}
+.formula{font-family:var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:nowrap}
+#csvBox{width:100%;min-height:90px;font-family:var(--mono);font-size:.78rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px}
+@media (prefers-reduced-motion:reduce){.needle{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Gap-fraction method · single angle 57.5°</div>
+    <h1>Canopy LAI Meter</h1>
+    <p>Stand under the canopy, point the back camera up through the leaves at 57.5° from vertical, and capture. The app measures the sky fraction in the centre window and converts it to effective leaf area index.</p>
+  </header>
+
+  <section aria-label="Viewfinder">
+    <div class="view">
+      <video id="video" playsinline muted hidden></video>
+      <canvas id="still"></canvas>
+      <div class="window"></div>
+      <span class="tag" id="srcTag">Example canopy image</span>
+    </div>
+
+    <div class="gauge">
+      <div class="zread">
+        <span class="eyebrow">Camera zenith angle</span>
+        <span><b id="zVal">—</b> <span class="state" id="zState">tilt sensor off</span></span>
+      </div>
+      <div class="scale" id="scale">
+        <div class="band" id="band"></div>
+        <div class="needle" id="needle" style="left:50%" hidden></div>
+      </div>
+      <div class="ticks"><span>30°</span><span>45°</span><span>60°</span><span>75°</span><span>90°</span></div>
+    </div>
+
+    <div class="controls">
+      <button id="camBtn" class="primary">Start live camera</button>
+      <button id="capBtn" disabled>Capture now</button>
+      <label class="btn" for="file">Take or upload photo</label>
+      <input type="file" id="file" accept="image/*" capture="environment" hidden>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="auto" checked> Auto-capture when held at 57.5° ± 1.5°</label>
+      <label>Zenith for photos <input type="number" id="zManual" value="57.5" step="0.5" min="10" max="80">°</label>
+    </div>
+    <p class="msg" id="msg"></p>
+  </section>
+
+  <section aria-label="Last reading">
+    <h2>Last reading</h2>
+    <div class="stats">
+      <div class="stat hero"><div class="k">LAI eff</div><div class="v" id="sLai">—</div></div>
+      <div class="stat"><div class="k">Gap fraction P</div><div class="v" id="sP">—</div></div>
+      <div class="stat"><div class="k">Blue threshold</div><div class="v" id="sT">—</div></div>
+      <div class="stat"><div class="k">Zenith θ</div><div class="v" id="sZ">—</div></div>
+    </div>
+    <div class="maskrow">
+      <canvas id="mask" width="140" height="140" aria-label="Classified centre window"></canvas>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--sky)"></span>Sky (gap)</span>
+        <span><span class="sw" style="background:var(--accent)"></span>Leaf, branch or stem</span>
+        <div class="row">
+          <label>Threshold
+            <select id="thMode"><option value="otsu">Automatic (Otsu)</option><option value="manual">Manual</option></select>
+          </label>
+          <label><input type="range" id="thVal" min="1" max="254" value="150" disabled aria-label="Manual threshold"> <span id="thOut" style="font-family:var(--mono)">150</span></label>
+        </div>
+        <span>Check the mask: if sunlit leaves show as sky, shoot again under overcast light or move the threshold.</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Readings">
+    <h2>Plot readings</h2>
+    <div class="summary" id="summary"></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Time</th><th>Source</th><th>θ (°)</th><th>T</th><th>P</th><th>LAI</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="controls">
+      <button id="copyBtn">Copy CSV</button>
+      <button id="dlBtn" hidden>Download CSV</button>
+      <button id="clearBtn">Clear readings</button>
+    </div>
+    <textarea id="csvBox" hidden readonly aria-label="CSV data"></textarea>
+  </section>
+
+  <section class="method" aria-label="Method">
+    <h2>How the number is computed</h2>
+    <p>Beer–Lambert gap fraction with the leaf projection function G = 0.5, which holds at θ ≈ 57.5° for any leaf angle distribution:</p>
+    <div class="formula">LAI<sub>eff</sub> = −ln(P) · cos θ / G &nbsp;≈&nbsp; −1.075 · ln(P) at θ = 57.5°</div>
+    <ul>
+      <li>P is the share of sky pixels in the centre window (about ±10° around the camera axis), classified on the blue channel.</li>
+      <li>Take 8–15 readings per plot at different spots. The summary gives the mean LAI and the Lang–Xiang clumping estimate, ln(mean P) / mean(ln P).</li>
+      <li>Values are effective LAI. True LAI needs a clumping correction, and readings above about LAI 5 saturate.</li>
+      <li>Best light: uniform overcast sky, or just after sunrise or before sunset. Avoid the sun in frame.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const G = 0.5, TARGET = 57.5, TOL = 1.5, WIN = 0.3, MAXW = 720;
+  const video = $('video'), still = $('still'), sctx = still.getContext('2d', {willReadFrequently:true});
+  const mask = $('mask'), mctx = mask.getContext('2d');
+  let stream = null, zenith = null, holdStart = 0, lastCap = 0, readings = [], lastImage = null;
+
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  if (!inFrame) $('dlBtn').hidden = false;
+
+  // Gauge band (30°–90° scale)
+  const pct = z => Math.max(0, Math.min(100, (z - 30) / 60 * 100));
+  $('band').style.left = pct(TARGET - TOL) + '%';
+  $('band').style.width = (pct(TARGET + TOL) - pct(TARGET - TOL)) + '%';
+
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const hexRgb = h => { h = h.replace('#',''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+
+  function otsu(hist, total) {
+    let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let sumB = 0, wB = 0, best = 0, t = 127;
+    for (let i = 0; i < 256; i++) {
+      wB += hist[i]; if (!wB) continue;
+      const wF = total - wB; if (!wF) break;
+      sumB += i * hist[i];
+      const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) ** 2;
+      if (v > best) { best = v; t = i; }
+    }
+    return t;
+  }
+
+  // Analyse the centre window of whatever is on the still canvas
+  function analyse(theta) {
+    const w = still.width, h = still.height, side = Math.round(WIN * Math.min(w, h));
+    const x0 = Math.round((w - side) / 2), y0 = Math.round((h - side) / 2);
+    const d = sctx.getImageData(x0, y0, side, side).data, n = side * side;
+    const hist = new Uint32Array(256);
+    for (let i = 2; i < d.length; i += 4) hist[d[i]]++;
+    const T = $('thMode').value === 'otsu' ? otsu(hist, n) : +$('thVal').value;
+    if ($('thMode').value === 'otsu') { $('thVal').value = T; $('thOut').textContent = T; }
+    // mask preview
+    const mImg = mctx.createImageData(side, side), sky = hexRgb(css('--sky')), leaf = hexRgb(css('--accent'));
+    let gaps = 0;
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+      const isSky = d[i + 2] > T; if (isSky) gaps++;
+      const c = isSky ? sky : leaf;
+      mImg.data[i] = c[0]; mImg.data[i + 1] = c[1]; mImg.data[i + 2] = c[2]; mImg.data[i + 3] = 255;
+    }
+    const tmp = document.createElement('canvas'); tmp.width = tmp.height = side;
+    tmp.getContext('2d').putImageData(mImg, 0, 0);
+    mctx.imageSmoothingEnabled = false; mctx.clearRect(0, 0, 140, 140); mctx.drawImage(tmp, 0, 0, 140, 140);
+    const P = Math.max(gaps, 1) / n;
+    const lai = -Math.log(P) * Math.cos(theta * Math.PI / 180) / G;
+    return { P, lai, T, theta };
+  }
+
+  function showResult(r) {
+    $('sLai').textContent = r.lai.toFixed(2);
+    $('sP').textContent = r.P.toFixed(3);
+    $('sT').textContent = r.T;
+    $('sZ').textContent = r.theta.toFixed(1) + '°';
+  }
+
+  function record(source, theta, example) {
+    const r = analyse(theta); showResult(r);
+    readings.push({ time: new Date(), source, example: !!example, ...r });
+    renderTable();
+  }
+
+  function renderTable() {
+    const tb = $('tbody'); tb.textContent = '';
+    readings.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      const cells = [i + 1, r.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
+        r.source + (r.example ? ' (example)' : ''), r.theta.toFixed(1), r.T, r.P.toFixed(3), r.lai.toFixed(2)];
+      cells.forEach((c, j) => { const td = document.createElement('td'); td.textContent = c;
+        if (r.example && j === 2) td.className = 'ex'; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    const s = $('summary'); s.textContent = '';
+    const add = (k, v) => { const sp = document.createElement('span'); sp.append(k + ' '); const b = document.createElement('b'); b.textContent = v; sp.append(b); s.append(sp); };
+    const n = readings.length;
+    if (!n) { s.textContent = 'No readings yet. Capture a photo to start the plot.'; return; }
+    const lais = readings.map(r => r.lai), mean = lais.reduce((a, b) => a + b, 0) / n;
+    const sd = n > 1 ? Math.sqrt(lais.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0;
+    add('n =', n); add('Mean LAI', mean.toFixed(2)); add('SD', n > 1 ? sd.toFixed(2) : '—');
+    if (n > 1) {
+      const meanLnP = readings.reduce((a, r) => a + Math.log(r.P), 0) / n;
+      const meanP = readings.reduce((a, r) => a + r.P, 0) / n;
+      add('Clumping Ω (Lang–Xiang)', (Math.log(meanP) / meanLnP).toFixed(2));
+    }
+  }
+
+  function csv() {
+    const head = 'n,time,source,zenith_deg,blue_threshold,gap_fraction,lai_eff';
+    return [head, ...readings.map((r, i) => [i + 1, r.time.toISOString(), r.source + (r.example ? '_example' : ''),
+      r.theta.toFixed(2), r.T, r.P.toFixed(5), r.lai.toFixed(3)].join(','))].join('\n');
+  }
+
+  // Draw an image or video frame onto the still canvas
+  function drawSource(src, sw, sh) {
+    const scale = Math.min(1, MAXW / Math.max(sw, sh));
+    still.width = Math.round(sw * scale); still.height = Math.round(sh * scale);
+    sctx.drawImage(src, 0, 0, still.width, still.height);
+    lastImage = true;
+  }
+
+  function captureLive() {
+    if (!stream || !video.videoWidth) return;
+    drawSource(video, video.videoWidth, video.videoHeight);
+    record('camera', zenith ?? +$('zManual').value);
+    lastCap = performance.now();
+    $('srcTag').textContent = 'Captured ' + new Date().toLocaleTimeString();
+    if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+  }
+
+  // Tilt: zenith of the rear-camera axis from beta/gamma (device z-axis points out of the screen)
+  function onOrient(e) {
+    if (e.beta == null) return;
+    const b = e.beta * Math.PI / 180, g = (e.gamma || 0) * Math.PI / 180;
+    zenith = Math.acos(Math.max(-1, Math.min(1, -Math.cos(b) * Math.cos(g)))) * 180 / Math.PI;
+    $('zVal').textContent = zenith.toFixed(1) + '°';
+    const nd = $('needle'); nd.hidden = false; nd.style.left = pct(zenith) + '%';
+    const inBand = Math.abs(zenith - TARGET) <= TOL;
+    $('zState').textContent = inBand ? 'on target' : (zenith < TARGET ? 'tilt lower' : 'tilt higher');
+    $('zState').className = 'state' + (inBand ? ' on' : '');
+    const now = performance.now();
+    if (stream && $('auto').checked && inBand) {
+      if (!holdStart) holdStart = now;
+      if (now - holdStart > 600 && now - lastCap > 2500) { captureLive(); holdStart = 0; }
+    } else holdStart = 0;
+  }
+
+  async function startSensors() {
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p !== 'granted') { $('zState').textContent = 'tilt permission denied'; return; }
+      }
+      window.addEventListener('deviceorientation', onOrient);
+      setTimeout(() => { if (zenith == null) $('zState').textContent = 'no tilt sensor; enter zenith manually'; }, 1500);
+    } catch (e) { $('zState').textContent = 'tilt sensor unavailable'; }
+  }
+
+  $('camBtn').addEventListener('click', async () => {
+    $('msg').textContent = '';
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.hidden = true; still.hidden = false;
+      $('camBtn').textContent = 'Start live camera'; $('capBtn').disabled = true; return; }
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('nomedia');
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
+      video.srcObject = stream; video.hidden = false; still.hidden = true; await video.play();
+      $('camBtn').textContent = 'Stop camera'; $('capBtn').disabled = false; $('srcTag').textContent = 'Live';
+      startSensors();
+    } catch (e) {
+      stream = null;
+      $('msg').textContent = window.AndroidBridge
+        ? 'Camera permission was refused. Allow it in Android Settings → Apps → LAI Meter → Permissions, then try again.'
+        : 'The live camera is not available here. Use "Take or upload photo", or run the page from an HTTPS address or the LAI Meter Android app for live capture with the tilt sensor.';
+    }
+  });
+  $('capBtn').addEventListener('click', captureLive);
+
+  $('file').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => {
+      if (stream) $('camBtn').click();
+      drawSource(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url);
+      record('photo', +$('zManual').value || TARGET);
+      $('srcTag').textContent = f.name.slice(0, 32);
+    };
+    img.onerror = () => { $('msg').textContent = 'That file could not be read as an image. Try a JPEG or PNG.'; };
+    img.src = url; e.target.value = '';
+  });
+
+  $('thMode').addEventListener('change', () => {
+    $('thVal').disabled = $('thMode').value === 'otsu';
+    if (lastImage && readings.length) reanalyseLast();
+  });
+  $('thVal').addEventListener('input', () => { $('thOut').textContent = $('thVal').value; if (lastImage && readings.length) reanalyseLast(); });
+  function reanalyseLast() {
+    const last = readings[readings.length - 1], r = analyse(last.theta);
+    Object.assign(last, r); showResult(r); renderTable();
+  }
+
+  $('copyBtn').addEventListener('click', () => {
+    const text = csv(), box = $('csvBox');
+    const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); $('msg').textContent = 'Clipboard blocked. The CSV is selected below; copy it manually.'; };
+    try { navigator.clipboard.writeText(text).then(() => { $('copyBtn').textContent = 'Copied'; setTimeout(() => $('copyBtn').textContent = 'Copy CSV', 1500); }, fallback); }
+    catch (e) { fallback(); }
+  });
+  $('dlBtn').addEventListener('click', () => {
+    if (window.AndroidBridge) { window.AndroidBridge.saveCsv(csv()); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv()], {type:'text/csv'}));
+    a.download = 'lai_readings.csv'; a.click();
+  });
+  $('clearBtn').addEventListener('click', () => { readings = []; renderTable();
+    ['sLai','sP','sT','sZ'].forEach(id => $(id).textContent = '—'); mctx.clearRect(0,0,140,140); });
+
+  // Example: synthetic upward canopy photo so the page opens in a working state
+  function exampleCanopy() {
+    still.width = 540; still.height = 720;
+    let s = 20261014; const rnd = () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const g = sctx.createLinearGradient(0, 0, 0, 720); g.addColorStop(0, '#8fbce8'); g.addColorStop(1, '#dce9f5');
+    sctx.fillStyle = g; sctx.fillRect(0, 0, 540, 720);
+    sctx.strokeStyle = '#3b2e22';
+    for (let i = 0; i < 9; i++) { sctx.lineWidth = 3 + rnd() * 9; sctx.beginPath();
+      sctx.moveTo(rnd() * 540, 720); sctx.quadraticCurveTo(rnd() * 540, rnd() * 400 + 200, rnd() * 540, rnd() * 300); sctx.stroke(); }
+    for (let i = 0; i < 1400; i++) {
+      const x = rnd() * 540, y = rnd() * 720, r = 6 + rnd() * 16, gr = 70 + rnd() * 70 | 0;
+      sctx.fillStyle = `rgba(${gr * .35 | 0},${gr},${gr * .3 | 0},${.75 + rnd() * .25})`;
+      sctx.beginPath(); sctx.ellipse(x, y, r, r * (.4 + rnd() * .3), rnd() * Math.PI, 0, Math.PI * 2); sctx.fill();
+    }
+    lastImage = true;
+    record('example', TARGET, true);
+  }
+  exampleCanopy();
+})();
+</script>
+</body></html>
