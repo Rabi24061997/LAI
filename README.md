@@ -1,8 +1,13 @@
 # LAI Meter – Android app
 
-Leaf Area Index from the phone camera, using the 57.5° gap-fraction method.
-The app shows the camera, reads the tilt sensor, captures automatically when the
-phone is held at 57.5° ± 1.5° from vertical, and saves readings as CSV to Downloads/LAI.
+Leaf Area Index from the phone camera. Maintained by LARG.
+
+- Normal mode: single-angle gap fraction at 57.5°, auto-capture when the phone is on target.
+- Fisheye mode: clip-on 180° lens, phone flat and camera up, five LI-COR-style zenith rings.
+- GPS position, accuracy and altitude saved with each reading (photo GPS used for uploads).
+- Map view of readings coloured by LAI (satellite / street map; needs internet).
+- Readings kept on the phone until cleared; CSV saved to Downloads/LAI.
+- Menu: "How the number is computed" and Settings.
 
 ## Build option A – GitHub (nothing to install)
 1. Create a free account on github.com and a new repository (e.g. `lai-meter-app`).
@@ -21,4 +26,4 @@ phone is held at 57.5° ± 1.5° from vertical, and saves readings as CSV to Dow
 
 ## Changing the app
 All of the measuring logic and the screen layout are in
-`app/src/main/assets/index.html`. Edit it, rebuild, reinstall.
+`app/src/main/assets/index.html` (map library: leaflet.js / leaflet.css in the same folder). Edit it, rebuild, reinstall.

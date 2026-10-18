@@ -1,313 +1,541 @@
 <!doctype html><html lang="en"><head></head><body>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Canopy LAI Meter</title>
+<title>LAI Meter</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="leaflet.css">
 <style>
-/* Layout: single field-instrument column — viewfinder, live readout, reading log, method card */
+/* Layout: one field-instrument column — mode switch, viewfinder, last reading, reading log (table/map); menu opens as a full sheet */
 :root{
-  --bg:#eef2ec; --surface:#ffffff; --fg:#17201a; --muted:#5b685f; --line:#d3dbd2;
-  --accent:#1f7a4c; --sky:#3b7cc0; --warn:#a85d18; --ok:#1f7a4c;
-  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
-  --body:"Archivo","Helvetica Neue",Arial,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --bg:#eef2ec; --surface:#ffffff; --fg:#17201a; --muted:#56625a; --line:#d3dbd2;
+  --accent:#1f7a4c; --sky:#3b7cc0; --warn:#a2561a; --ok:#1f7a4c; --on-accent:#ffffff;
+  --serif:"Times New Roman",Times,"Liberation Serif","Noto Serif","DejaVu Serif",serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#93a196; --line:#2a352d;
-  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; color-scheme:dark}}
+  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#97a59a; --line:#2a352d;
+  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; --on-accent:#0e1310; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#93a196; --line:#2a352d;
-  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; color-scheme:dark}
-body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
-.wrap{max-width:760px;margin:0 auto;padding-block:20px 48px;
+  --bg:#0e1310; --surface:#161d18; --fg:#e4ebe4; --muted:#97a59a; --line:#2a352d;
+  --accent:#55c28a; --sky:#6ea9e4; --warn:#e2a25b; --ok:#55c28a; --on-accent:#0e1310; color-scheme:dark}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--serif);font-size:16px;line-height:1.45}
+button,input,select,textarea{font-family:var(--serif)}
+.wrap{max-width:760px;margin:0 auto;padding-block:16px 28px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
-  display:grid;gap:20px}
-header h1{font-family:var(--display);font-weight:800;font-size:1.9rem;letter-spacing:-.01em;margin:0;text-wrap:balance}
-header p{margin:.25rem 0 0;color:var(--muted);max-width:62ch}
-.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  display:grid;gap:16px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.top h1{font-weight:700;font-size:2rem;letter-spacing:-.01em;margin:0;line-height:1.1}
+.eyebrow{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.menubtn{display:inline-flex;gap:8px;align-items:center;padding:9px 12px}
+.menubtn svg{width:18px;height:18px}
+.modes{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.modes button{border:0;border-radius:0;background:transparent;padding:10px 8px;display:grid;gap:0;text-align:center;justify-content:center}
+.modes button small{font-weight:400;color:var(--muted);font-size:.8rem}
+.modes button[aria-selected="true"]{background:var(--accent);color:var(--on-accent)}
+.modes button[aria-selected="true"] small{color:var(--on-accent);opacity:.85}
 section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px;min-width:0}
-h2{font-family:var(--display);font-size:1.05rem;font-weight:600;margin:0}
-.view{position:relative;width:100%;max-width:100%;aspect-ratio:3/4;max-height:62vh;margin:0 auto;background:#000;border-radius:6px;overflow:hidden}
+h2{font-size:1.2rem;font-weight:700;margin:0}
+.view{position:relative;width:100%;max-width:100%;aspect-ratio:3/4;max-height:60vh;margin:0 auto;background:#000;border-radius:6px;overflow:hidden}
+.view.fish{aspect-ratio:1/1}
 .view video,.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .window{position:absolute;left:35%;top:38.75%;width:30%;height:22.5%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 0 9999px rgba(0,0,0,.28);pointer-events:none}
-.tag{position:absolute;left:10px;top:10px;font-family:var(--mono);font-size:.72rem;background:rgba(0,0,0,.6);color:#fff;padding:3px 8px;border-radius:4px}
+.fishguide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.tag{position:absolute;left:10px;top:10px;font-size:.8rem;background:rgba(0,0,0,.62);color:#fff;padding:3px 8px;border-radius:4px;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gauge{display:grid;gap:6px}
-.scale{position:relative;height:28px;border-radius:4px;background:var(--bg);border:1px solid var(--line)}
-.band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 22%,transparent);border-left:1px solid var(--accent);border-right:1px solid var(--accent)}
-.needle{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;background:var(--fg);border-radius:2px;transition:left .08s linear}
-.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
 .zread{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
-.zread b{font-family:var(--mono);font-size:1.35rem;font-weight:500;font-variant-numeric:tabular-nums}
-.zread .state{font-size:.82rem;color:var(--muted)}
-.zread .state.on{color:var(--ok);font-weight:600}
+.zread b{font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums}
+.state{font-size:.9rem;color:var(--muted)}
+.state.on{color:var(--ok);font-weight:700}
+.scale{position:relative;height:28px;border-radius:4px;background:var(--bg);border:1px solid var(--line)}
+.band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--accent) 24%,transparent);border-left:1px solid var(--accent);border-right:1px solid var(--accent)}
+.needle{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;background:var(--fg);border-radius:2px;transition:left .08s linear}
+.ticks{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .controls{display:flex;flex-wrap:wrap;gap:8px}
-button,.btn{font:600 .92rem var(--body);padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center}
-button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button,.btn{font-weight:700;font-size:.95rem;padding:10px 14px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.danger{color:var(--warn);border-color:var(--warn)}
 button:disabled{opacity:.45;cursor:not-allowed}
 button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
-.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:.9rem}
-.row label{display:inline-flex;gap:6px;align-items:center}
-input[type=number]{width:5.5em;font:inherit;font-family:var(--mono);padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
-select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg)}
-.msg{margin:0;font-size:.88rem;color:var(--warn)}
+.gps{font-size:.92rem;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)}
+.dot.bad{background:var(--warn)}
+.msg{margin:0;font-size:.92rem;color:var(--warn)}
 .msg:empty{display:none}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .stat{background:var(--surface);padding:10px 12px;min-width:0}
-.stat .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.stat .v{font-family:var(--mono);font-size:1.3rem;font-variant-numeric:tabular-nums}
-.stat.hero .v{color:var(--accent);font-weight:500}
+.stat .k{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-size:1.45rem;font-variant-numeric:tabular-nums}
+.stat.hero .v{color:var(--accent);font-weight:700}
 @media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.maskrow{display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:start}
+.maskrow{display:grid;grid-template-columns:140px minmax(0,1fr);gap:14px;align-items:start}
 @media (max-width:440px){.maskrow{grid-template-columns:1fr}}
 #mask{width:140px;height:140px;border-radius:4px;border:1px solid var(--line);image-rendering:pixelated;background:var(--bg)}
-.legend{font-size:.85rem;color:var(--muted);display:grid;gap:6px}
+.legend{font-size:.92rem;color:var(--muted);display:grid;gap:6px}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.exnote{font-size:.88rem;color:var(--muted);font-style:italic}
+details{font-size:.92rem}
+summary{cursor:pointer;color:var(--muted)}
 .tablewrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.82rem;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:.92rem;font-variant-numeric:tabular-nums}
 th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-th{font-weight:500;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}
-th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-td.ex{color:var(--muted);font-style:italic}
-.summary{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:.9rem}
-.summary b{font-family:var(--mono);font-weight:500}
-.method{font-size:.92rem}
-.method p,.method ul{margin:0;max-width:65ch}
-.method ul{padding-left:1.2em;display:grid;gap:4px}
-.formula{font-family:var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:nowrap}
-#csvBox{width:100%;min-height:90px;font-family:var(--mono);font-size:.78rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px}
+th{font-weight:700;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.05em}
+th:nth-child(-n+3),td:nth-child(-n+3){text-align:left}
+td.del button{padding:2px 8px;font-size:.85rem}
+.rhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 14px;background:var(--bg)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.summary{display:grid;gap:4px;font-size:.98rem}
+.summary b{font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:.95rem}
+#map{height:360px;border-radius:6px;border:1px solid var(--line);z-index:0}
+.mapnote{font-size:.9rem;color:var(--muted)}
+.lai-legend{background:var(--surface);color:var(--fg);padding:6px 8px;border-radius:4px;font:13px var(--serif);border:1px solid var(--line)}
+.lai-legend .bar{height:8px;width:120px;border-radius:2px;background:linear-gradient(90deg,#f2e8a0,#a6cf6a,#4f9a48,#1d5a2c);margin:3px 0}
+.lai-legend .lb{display:flex;justify-content:space-between}
+.leaflet-container{font-family:var(--serif)}
+#csvBox{width:100%;min-height:90px;font-size:.85rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px}
+footer{text-align:center;color:var(--muted);font-size:.95rem;padding-top:4px}
+footer b{color:var(--fg)}
+/* menu sheet */
+.sheet{position:fixed;inset:0;z-index:2000;background:var(--bg);overflow-y:auto;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet .inner{max-width:760px;margin:0 auto;padding-block:16px 32px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+.sheethead{display:flex;align-items:center;gap:10px}
+.sheethead h2{flex:1;font-size:1.4rem}
+.menulist{display:grid;gap:10px}
+.menulist button{justify-content:space-between;padding:16px;font-size:1.05rem;background:var(--surface)}
+.menulist button span{font-weight:400;color:var(--muted);font-size:.9rem;display:block}
+.prose{font-size:1rem}
+.prose p,.prose ul,.prose ol{margin:0;max-width:65ch}
+.prose ul,.prose ol{padding-left:1.2em;display:grid;gap:4px}
+.prose h3{margin:6px 0 0;font-size:1.08rem}
+.formula{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow-x:auto;white-space:nowrap;font-size:1.02rem}
+.ringtable{overflow-x:auto}
+.form{display:grid;gap:12px}
+.field{display:grid;gap:4px}
+.field label{font-weight:700}
+.field .hint{font-size:.88rem;color:var(--muted)}
+.field input[type=number],.field select{font-size:1rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--fg);width:8em}
+.check{display:flex;gap:8px;align-items:center;font-weight:700}
+.rangeline{display:flex;gap:10px;align-items:center}
 @media (prefers-reduced-motion:reduce){.needle{transition:none}}
 </style>
 
-<div class="wrap">
-  <header>
-    <div class="eyebrow">Gap-fraction method · single angle 57.5°</div>
-    <h1>Canopy LAI Meter</h1>
-    <p>Stand under the canopy, point the back camera up through the leaves at 57.5° from vertical, and capture. The app measures the sky fraction in the centre window and converts it to effective leaf area index.</p>
+<div class="wrap" id="app">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Leaf area index from the phone camera</div>
+      <h1>LAI Meter</h1>
+    </div>
+    <button class="menubtn" id="menuBtn" aria-haspopup="dialog" aria-controls="sheet">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>Menu
+    </button>
   </header>
 
+  <div class="modes" role="tablist" aria-label="Measurement mode">
+    <button role="tab" id="modeNormal" data-mode="normal" aria-selected="true">Normal<small>single angle 57.5°</small></button>
+    <button role="tab" id="modeFish" data-mode="fisheye" aria-selected="false">Fisheye<small>clip-on 180° lens</small></button>
+  </div>
+
   <section aria-label="Viewfinder">
-    <div class="view">
+    <div class="view" id="view">
       <video id="video" playsinline muted hidden></video>
       <canvas id="still"></canvas>
-      <div class="window"></div>
+      <div class="window" id="win"></div>
+      <svg class="fishguide" id="fishGuide" viewBox="0 0 100 100" hidden aria-hidden="true">
+        <circle cx="50" cy="50" r="49.5" fill="none" stroke="#fff" stroke-width=".5" stroke-dasharray="1.5 1.5" opacity=".8"/>
+        <circle cx="50" cy="50" r="41.2" fill="none" stroke="#fff" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="32.3" fill="none" stroke="#fff" stroke-width=".35" opacity=".7"/>
+        <circle cx="50" cy="50" r="24.1" fill="none" stroke="#fff" stroke-width=".35" opacity=".7"/>
+        <circle cx="50" cy="50" r="15.9" fill="none" stroke="#fff" stroke-width=".35" opacity=".7"/>
+        <circle cx="50" cy="50" r="6.8" fill="none" stroke="#fff" stroke-width=".35" opacity=".7"/>
+        <path d="M48 50h4M50 48v4" stroke="#fff" stroke-width=".5"/>
+      </svg>
       <span class="tag" id="srcTag">Example canopy image</span>
     </div>
 
     <div class="gauge">
       <div class="zread">
-        <span class="eyebrow">Camera zenith angle</span>
+        <span class="eyebrow" id="gLabel">Camera zenith angle</span>
         <span><b id="zVal">—</b> <span class="state" id="zState">tilt sensor off</span></span>
       </div>
-      <div class="scale" id="scale">
-        <div class="band" id="band"></div>
-        <div class="needle" id="needle" style="left:50%" hidden></div>
-      </div>
-      <div class="ticks"><span>30°</span><span>45°</span><span>60°</span><span>75°</span><span>90°</span></div>
+      <div class="scale"><div class="band" id="band"></div><div class="needle" id="needle" hidden></div></div>
+      <div class="ticks" id="ticks"></div>
     </div>
 
     <div class="controls">
       <button id="camBtn" class="primary">Start live camera</button>
       <button id="capBtn" disabled>Capture now</button>
       <label class="btn" for="file">Take or upload photo</label>
-      <input type="file" id="file" accept="image/*" capture="environment" hidden>
+      <input type="file" id="file" accept="image/*" hidden>
     </div>
-    <div class="row">
-      <label><input type="checkbox" id="auto" checked> Auto-capture when held at 57.5° ± 1.5°</label>
-      <label>Zenith for photos <input type="number" id="zManual" value="57.5" step="0.5" min="10" max="80">°</label>
-    </div>
-    <p class="msg" id="msg"></p>
+    <div class="gps" id="gps"><span class="dot" id="gpsDot"></span><span id="gpsText">Location: waiting for GPS</span></div>
+    <p class="msg" id="msg" role="status"></p>
   </section>
 
   <section aria-label="Last reading">
     <h2>Last reading</h2>
     <div class="stats">
-      <div class="stat hero"><div class="k">LAI eff</div><div class="v" id="sLai">—</div></div>
-      <div class="stat"><div class="k">Gap fraction P</div><div class="v" id="sP">—</div></div>
+      <div class="stat hero"><div class="k">LAI</div><div class="v" id="sLai">—</div></div>
+      <div class="stat"><div class="k" id="kP">Gap fraction P</div><div class="v" id="sP">—</div></div>
       <div class="stat"><div class="k">Blue threshold</div><div class="v" id="sT">—</div></div>
-      <div class="stat"><div class="k">Zenith θ</div><div class="v" id="sZ">—</div></div>
+      <div class="stat"><div class="k" id="kZ">Zenith θ</div><div class="v" id="sZ">—</div></div>
     </div>
     <div class="maskrow">
-      <canvas id="mask" width="140" height="140" aria-label="Classified centre window"></canvas>
+      <canvas id="mask" width="140" height="140" aria-label="Classified image: sky and leaves"></canvas>
       <div class="legend">
         <span><span class="sw" style="background:var(--sky)"></span>Sky (gap)</span>
         <span><span class="sw" style="background:var(--accent)"></span>Leaf, branch or stem</span>
-        <div class="row">
-          <label>Threshold
-            <select id="thMode"><option value="otsu">Automatic (Otsu)</option><option value="manual">Manual</option></select>
-          </label>
-          <label><input type="range" id="thVal" min="1" max="254" value="150" disabled aria-label="Manual threshold"> <span id="thOut" style="font-family:var(--mono)">150</span></label>
-        </div>
-        <span>Check the mask: if sunlit leaves show as sky, shoot again under overcast light or move the threshold.</span>
+        <span id="maskHint">Check the mask. If sunlit leaves show as sky, shoot again under overcast light or set a manual threshold in Settings.</span>
+        <span class="exnote" id="exNote">Example image: these numbers are not saved.</span>
       </div>
     </div>
+    <details id="ringDetails" hidden>
+      <summary>Gap fraction by zenith ring</summary>
+      <div class="ringtable"><table>
+        <thead><tr><th>Ring</th><th>Zenith range</th><th>Centre</th><th>Weight</th><th>P</th></tr></thead>
+        <tbody id="ringBody"></tbody>
+      </table></div>
+    </details>
   </section>
 
-  <section aria-label="Readings">
-    <h2>Plot readings</h2>
+  <section aria-label="Plot readings">
+    <div class="rhead">
+      <h2>Plot readings</h2>
+      <div class="seg" role="group" aria-label="View">
+        <button id="vTable" aria-pressed="true">Table</button>
+        <button id="vMap" aria-pressed="false">Map</button>
+      </div>
+    </div>
     <div class="summary" id="summary"></div>
-    <div class="tablewrap">
+    <div id="tablePane" class="tablewrap">
       <table>
-        <thead><tr><th>#</th><th>Time</th><th>Source</th><th>θ (°)</th><th>T</th><th>P</th><th>LAI</th></tr></thead>
+        <thead><tr><th>#</th><th>Time</th><th>Mode</th><th>LAI</th><th>P</th><th>Lat</th><th>Lon</th><th>±m</th><th>Alt m</th><th><span hidden>Delete</span></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
+    </div>
+    <div id="mapPane" hidden>
+      <div id="map" role="region" aria-label="Map of readings"></div>
+      <p class="mapnote" id="mapNote"></p>
     </div>
     <div class="controls">
       <button id="copyBtn">Copy CSV</button>
       <button id="dlBtn" hidden>Download CSV</button>
-      <button id="clearBtn">Clear readings</button>
+      <button id="clearBtn" class="danger">Clear readings</button>
     </div>
     <textarea id="csvBox" hidden readonly aria-label="CSV data"></textarea>
   </section>
 
-  <section class="method" aria-label="Method">
-    <h2>How the number is computed</h2>
-    <p>Beer–Lambert gap fraction with the leaf projection function G = 0.5, which holds at θ ≈ 57.5° for any leaf angle distribution:</p>
-    <div class="formula">LAI<sub>eff</sub> = −ln(P) · cos θ / G &nbsp;≈&nbsp; −1.075 · ln(P) at θ = 57.5°</div>
-    <ul>
-      <li>P is the share of sky pixels in the centre window (about ±10° around the camera axis), classified on the blue channel.</li>
-      <li>Take 8–15 readings per plot at different spots. The summary gives the mean LAI and the Lang–Xiang clumping estimate, ln(mean P) / mean(ln P).</li>
-      <li>Values are effective LAI. True LAI needs a clumping correction, and readings above about LAI 5 saturate.</li>
-      <li>Best light: uniform overcast sky, or just after sunrise or before sunset. Avoid the sun in frame.</li>
-    </ul>
-  </section>
+  <footer>Maintained by <b>LARG</b></footer>
 </div>
 
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="inner">
+    <div class="sheethead">
+      <button id="sheetBack" hidden aria-label="Back to menu">‹ Back</button>
+      <h2 id="sheetTitle">Menu</h2>
+      <button id="sheetClose">Close</button>
+    </div>
+
+    <div id="pMenu" class="menulist">
+      <button data-go="pMethod">How the number is computed<span>Formulas for normal and fisheye modes</span></button>
+      <button data-go="pSettings">Settings<span>Auto-capture, angles, threshold, beep</span></button>
+    </div>
+
+    <div id="pMethod" class="prose" hidden>
+      <div style="display:grid;gap:12px">
+        <p>Both modes measure the <b>gap fraction</b> P: the share of sky seen through the canopy from below. Beer–Lambert's law links P to leaf area:</p>
+        <div class="formula">P(θ) = exp( −G(θ) · LAI / cos θ )</div>
+        <p>θ is the view zenith angle and G is the leaf projection function. Sky and leaf pixels are separated on the blue channel using Otsu's automatic threshold, unless you set a manual one.</p>
+
+        <h3>Normal mode (single angle)</h3>
+        <p>At θ = 57.5°, G ≈ 0.5 for any leaf angle distribution, so:</p>
+        <div class="formula">LAI = −ln(P) · cos 57.5° / 0.5 ≈ −1.075 · ln(P)</div>
+        <p>P is measured in the centre window of the photo (about ±10° around the camera axis).</p>
+
+        <h3>Fisheye mode (five rings, LI-COR style)</h3>
+        <p>With a 180° lens, distance from the image centre maps to zenith angle (θ = 90° · r / R). The image is split into the same five rings used by the LI-COR LAI-2200, and LAI is the weighted sum:</p>
+        <div class="formula">LAI = 2 · Σ W<sub>i</sub> · cos θ<sub>i</sub> · ( −ln P<sub>i</sub> )</div>
+        <div class="ringtable"><table>
+          <thead><tr><th>Ring</th><th>Zenith range</th><th>Centre θ<sub>i</sub></th><th>Weight W<sub>i</sub></th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>0–12.3°</td><td>7°</td><td>0.034</td></tr>
+            <tr><td>2</td><td>16.7–28.6°</td><td>23°</td><td>0.104</td></tr>
+            <tr><td>3</td><td>32.4–43.4°</td><td>38°</td><td>0.160</td></tr>
+            <tr><td>4</td><td>47.3–58.1°</td><td>53°</td><td>0.218</td></tr>
+            <tr><td>5</td><td>62.3–74.1°</td><td>68°</td><td>0.494</td></tr>
+          </tbody>
+        </table></div>
+        <p>The lens is assumed to give a centred 180° image circle that fills the shorter side of the photo.</p>
+
+        <h3>Plot summary</h3>
+        <ul>
+          <li>Mean and SD are given separately for each mode.</li>
+          <li>Normal mode also shows the Lang–Xiang clumping estimate, ln(mean P) / mean(ln P).</li>
+          <li>Fisheye mode also shows a LI-COR-style value: ring gap fractions are averaged over all fisheye readings first, then converted to LAI. This is the closest match to how the LAI-2200 combines its below readings.</li>
+        </ul>
+
+        <h3>Limits</h3>
+        <ul>
+          <li>Values are effective LAI and include stems and branches. True LAI needs a clumping correction.</li>
+          <li>Readings above about LAI 5 saturate.</li>
+          <li>Best light: uniform overcast sky, or soon after sunrise or before sunset. Keep the sun out of the frame.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div id="pSettings" class="form" hidden>
+      <label class="check"><input type="checkbox" id="setAuto"> Auto-capture when the phone is on target</label>
+      <label class="check"><input type="checkbox" id="setBeep"> Beep and vibrate on capture</label>
+      <div class="field">
+        <label for="setTolN">Normal mode tolerance (±°)</label>
+        <input type="number" id="setTolN" min="0.5" max="5" step="0.5">
+        <span class="hint">Captures when the camera is within this many degrees of 57.5°.</span>
+      </div>
+      <div class="field">
+        <label for="setTolF">Fisheye level tolerance (°)</label>
+        <input type="number" id="setTolF" min="0.5" max="8" step="0.5">
+        <span class="hint">Captures when the camera points within this many degrees of straight up.</span>
+      </div>
+      <div class="field">
+        <label for="setZen">Zenith angle for uploaded photos in normal mode (°)</label>
+        <input type="number" id="setZen" min="10" max="80" step="0.5">
+      </div>
+      <div class="field">
+        <label for="setTh">Sky / leaf threshold</label>
+        <select id="setTh"><option value="otsu">Automatic (Otsu)</option><option value="manual">Manual</option></select>
+        <div class="rangeline"><input type="range" id="setThVal" min="1" max="254" aria-label="Manual threshold"><b id="thOut"></b></div>
+        <span class="hint">Pixels with a blue value above the threshold count as sky.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="leaflet.js"></script>
+
 <script>
-(() => {
-  const $ = id => document.getElementById(id);
-  const G = 0.5, TARGET = 57.5, TOL = 1.5, WIN = 0.3, MAXW = 720;
-  const video = $('video'), still = $('still'), sctx = still.getContext('2d', {willReadFrequently:true});
-  const mask = $('mask'), mctx = mask.getContext('2d');
-  let stream = null, zenith = null, holdStart = 0, lastCap = 0, readings = [], lastImage = null;
-
-  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-  if (!inFrame) $('dlBtn').hidden = false;
-
-  // Gauge band (30°–90° scale)
-  const pct = z => Math.max(0, Math.min(100, (z - 30) / 60 * 100));
-  $('band').style.left = pct(TARGET - TOL) + '%';
-  $('band').style.width = (pct(TARGET + TOL) - pct(TARGET - TOL)) + '%';
-
-  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const hexRgb = h => { h = h.replace('#',''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
-    const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+/* LAI core: pure functions, no DOM */
+(function (root) {
+  const RINGS = [
+    { lo: 0, hi: 12.3, c: 7, w: 0.034 },
+    { lo: 16.7, hi: 28.6, c: 23, w: 0.104 },
+    { lo: 32.4, hi: 43.4, c: 38, w: 0.160 },
+    { lo: 47.3, hi: 58.1, c: 53, w: 0.218 },
+    { lo: 62.3, hi: 74.1, c: 68, w: 0.494 }
+  ];
+  const RAD = Math.PI / 180;
 
   function otsu(hist, total) {
     let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
-    let sumB = 0, wB = 0, best = 0, t = 127;
+    let sumB = 0, wB = 0, best = -1, t = 127;
     for (let i = 0; i < 256; i++) {
       wB += hist[i]; if (!wB) continue;
       const wF = total - wB; if (!wF) break;
       sumB += i * hist[i];
-      const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) ** 2;
+      const mB = sumB / wB, mF = (sum - sumB) / wF, v = wB * wF * (mB - mF) * (mB - mF);
       if (v > best) { best = v; t = i; }
     }
     return t;
   }
 
-  // Analyse the centre window of whatever is on the still canvas
-  function analyse(theta) {
-    const w = still.width, h = still.height, side = Math.round(WIN * Math.min(w, h));
+  // Normal mode: centre window, single zenith angle
+  function normal(data, w, h, o) {
+    const side = Math.max(4, Math.round(0.3 * Math.min(w, h)));
     const x0 = Math.round((w - side) / 2), y0 = Math.round((h - side) / 2);
-    const d = sctx.getImageData(x0, y0, side, side).data, n = side * side;
     const hist = new Uint32Array(256);
-    for (let i = 2; i < d.length; i += 4) hist[d[i]]++;
-    const T = $('thMode').value === 'otsu' ? otsu(hist, n) : +$('thVal').value;
-    if ($('thMode').value === 'otsu') { $('thVal').value = T; $('thOut').textContent = T; }
-    // mask preview
-    const mImg = mctx.createImageData(side, side), sky = hexRgb(css('--sky')), leaf = hexRgb(css('--accent'));
-    let gaps = 0;
-    for (let p = 0, i = 0; p < n; p++, i += 4) {
-      const isSky = d[i + 2] > T; if (isSky) gaps++;
-      const c = isSky ? sky : leaf;
-      mImg.data[i] = c[0]; mImg.data[i + 1] = c[1]; mImg.data[i + 2] = c[2]; mImg.data[i + 3] = 255;
+    for (let y = y0; y < y0 + side; y++) for (let x = x0; x < x0 + side; x++) hist[data[(y * w + x) * 4 + 2]]++;
+    const n = side * side;
+    const T = o.manual ? o.thVal : otsu(hist, n);
+    let sky = 0; for (let b = T + 1; b < 256; b++) sky += hist[b];
+    const P = Math.max(sky, 1) / n;
+    const lai = -Math.log(P) * Math.cos(o.theta * RAD) / 0.5;
+    return { P, lai, T, x0, y0, side };
+  }
+
+  // Fisheye mode: centred 180° circle filling the shorter side, five LI-COR rings
+  function fisheye(data, w, h, o) {
+    const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2, rMax = R * 74.1 / 90;
+    const hist = new Uint32Array(256);
+    const x0 = Math.max(0, Math.floor(cx - rMax)), x1 = Math.min(w - 1, Math.ceil(cx + rMax));
+    const y0 = Math.max(0, Math.floor(cy - rMax)), y1 = Math.min(h - 1, Math.ceil(cy + rMax));
+    const ringOf = new Int8Array((x1 - x0 + 1) * (y1 - y0 + 1)).fill(-1);
+    const ringTot = new Float64Array(5);
+    let k = 0, total = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++, k++) {
+      const dx = x + .5 - cx, dy = y + .5 - cy, r = Math.sqrt(dx * dx + dy * dy);
+      if (r > rMax) continue;
+      const th = r / R * 90;
+      hist[data[(y * w + x) * 4 + 2]]++; total++;
+      for (let i = 0; i < 5; i++) if (th >= RINGS[i].lo && th <= RINGS[i].hi) { ringOf[k] = i; ringTot[i]++; break; }
     }
-    const tmp = document.createElement('canvas'); tmp.width = tmp.height = side;
-    tmp.getContext('2d').putImageData(mImg, 0, 0);
-    mctx.imageSmoothingEnabled = false; mctx.clearRect(0, 0, 140, 140); mctx.drawImage(tmp, 0, 0, 140, 140);
-    const P = Math.max(gaps, 1) / n;
-    const lai = -Math.log(P) * Math.cos(theta * Math.PI / 180) / G;
-    return { P, lai, T, theta };
-  }
-
-  function showResult(r) {
-    $('sLai').textContent = r.lai.toFixed(2);
-    $('sP').textContent = r.P.toFixed(3);
-    $('sT').textContent = r.T;
-    $('sZ').textContent = r.theta.toFixed(1) + '°';
-  }
-
-  function record(source, theta, example) {
-    const r = analyse(theta); showResult(r);
-    readings.push({ time: new Date(), source, example: !!example, ...r });
-    renderTable();
-  }
-
-  function renderTable() {
-    const tb = $('tbody'); tb.textContent = '';
-    readings.forEach((r, i) => {
-      const tr = document.createElement('tr');
-      const cells = [i + 1, r.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
-        r.source + (r.example ? ' (example)' : ''), r.theta.toFixed(1), r.T, r.P.toFixed(3), r.lai.toFixed(2)];
-      cells.forEach((c, j) => { const td = document.createElement('td'); td.textContent = c;
-        if (r.example && j === 2) td.className = 'ex'; tr.appendChild(td); });
-      tb.appendChild(tr);
-    });
-    const s = $('summary'); s.textContent = '';
-    const add = (k, v) => { const sp = document.createElement('span'); sp.append(k + ' '); const b = document.createElement('b'); b.textContent = v; sp.append(b); s.append(sp); };
-    const n = readings.length;
-    if (!n) { s.textContent = 'No readings yet. Capture a photo to start the plot.'; return; }
-    const lais = readings.map(r => r.lai), mean = lais.reduce((a, b) => a + b, 0) / n;
-    const sd = n > 1 ? Math.sqrt(lais.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0;
-    add('n =', n); add('Mean LAI', mean.toFixed(2)); add('SD', n > 1 ? sd.toFixed(2) : '—');
-    if (n > 1) {
-      const meanLnP = readings.reduce((a, r) => a + Math.log(r.P), 0) / n;
-      const meanP = readings.reduce((a, r) => a + r.P, 0) / n;
-      add('Clumping Ω (Lang–Xiang)', (Math.log(meanP) / meanLnP).toFixed(2));
+    const T = o.manual ? o.thVal : otsu(hist, total);
+    const ringSky = new Float64Array(5);
+    let skyAll = 0; k = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++, k++) {
+      const dx = x + .5 - cx, dy = y + .5 - cy;
+      if (dx * dx + dy * dy > rMax * rMax) continue;
+      const isSky = data[(y * w + x) * 4 + 2] > T;
+      if (isSky) { skyAll++; if (ringOf[k] >= 0) ringSky[ringOf[k]]++; }
     }
+    const rings = RINGS.map((rg, i) => ringTot[i] ? Math.max(ringSky[i], 1) / ringTot[i] : NaN);
+    const lai = laiFromRings(rings);
+    return { P: Math.max(skyAll, 1) / total, rings, lai, T, cx, cy, R, rMax };
   }
 
-  function csv() {
-    const head = 'n,time,source,zenith_deg,blue_threshold,gap_fraction,lai_eff';
-    return [head, ...readings.map((r, i) => [i + 1, r.time.toISOString(), r.source + (r.example ? '_example' : ''),
-      r.theta.toFixed(2), r.T, r.P.toFixed(5), r.lai.toFixed(3)].join(','))].join('\n');
+  function laiFromRings(rings) {
+    let s = 0, wsum = 0;
+    rings.forEach((P, i) => { if (isFinite(P) && P > 0) { s += RINGS[i].w * Math.cos(RINGS[i].c * RAD) * -Math.log(P); wsum += RINGS[i].w; } });
+    if (!wsum) return NaN;
+    // rescale if a ring had no pixels, so weights still sum as in the full set
+    return 2 * s * (1.01 / wsum);
   }
 
-  // Draw an image or video frame onto the still canvas
-  function drawSource(src, sw, sh) {
-    const scale = Math.min(1, MAXW / Math.max(sw, sh));
-    still.width = Math.round(sw * scale); still.height = Math.round(sh * scale);
-    sctx.drawImage(src, 0, 0, still.width, still.height);
-    lastImage = true;
+  // EXIF GPS from a JPEG ArrayBuffer -> {lat, lon, alt} or null
+  function exifGps(buf) {
+    try {
+      const v = new DataView(buf);
+      if (v.getUint16(0) !== 0xFFD8) return null;
+      let off = 2;
+      while (off + 4 < v.byteLength) {
+        const marker = v.getUint16(off);
+        if ((marker & 0xFF00) !== 0xFF00) return null;
+        if (marker === 0xFFDA) return null;
+        const len = v.getUint16(off + 2);
+        if (marker === 0xFFE1 && v.getUint32(off + 4) === 0x45786966) return tiffGps(v, off + 10);
+        off += 2 + len;
+      }
+    } catch (e) {}
+    return null;
+  }
+  function tiffGps(v, t) {
+    const le = v.getUint16(t) === 0x4949;
+    const u16 = o => v.getUint16(o, le), u32 = o => v.getUint32(o, le);
+    const ifd0 = t + u32(t + 4), n = u16(ifd0);
+    let gps = 0;
+    for (let i = 0; i < n; i++) { const e = ifd0 + 2 + i * 12; if (u16(e) === 0x8825) gps = t + u32(e + 8); }
+    if (!gps) return null;
+    const m = u16(gps), tags = {};
+    for (let i = 0; i < m; i++) {
+      const e = gps + 2 + i * 12, tag = u16(e), type = u16(e + 2), cnt = u32(e + 4);
+      if (type === 2) tags[tag] = String.fromCharCode(v.getUint8(e + 8));
+      else if (type === 1) tags[tag] = v.getUint8(e + 8);
+      else if (type === 5) {
+        const p = t + u32(e + 8), a = [];
+        for (let j = 0; j < cnt; j++) { const d = u32(p + j * 8 + 4); a.push(d ? u32(p + j * 8) / d : 0); }
+        tags[tag] = a;
+      }
+    }
+    if (!tags[2] || !tags[4]) return null;
+    const dms = a => a[0] + (a[1] || 0) / 60 + (a[2] || 0) / 3600;
+    let lat = dms(tags[2]), lon = dms(tags[4]);
+    if (tags[1] === 'S') lat = -lat;
+    if (tags[3] === 'W') lon = -lon;
+    let alt = tags[6] ? tags[6][0] : null;
+    if (alt != null && tags[5] === 1) alt = -alt;
+    if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0)) return null;
+    return { lat, lon, alt };
   }
 
-  function captureLive() {
-    if (!stream || !video.videoWidth) return;
-    drawSource(video, video.videoWidth, video.videoHeight);
-    record('camera', zenith ?? +$('zManual').value);
-    lastCap = performance.now();
-    $('srcTag').textContent = 'Captured ' + new Date().toLocaleTimeString();
-    if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+  root.LAICore = { RINGS, otsu, normal, fisheye, laiFromRings, exifGps };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<script>
+(() => {
+  const C = window.LAICore, $ = id => document.getElementById(id);
+  const MAXW = 720, NORMAL_TARGET = 57.5;
+  const video = $('video'), still = $('still'), sctx = still.getContext('2d', { willReadFrequently: true });
+  const mctx = $('mask').getContext('2d');
+
+  // ---------- storage ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  const DEFAULTS = { mode: 'normal', auto: true, beep: true, tolN: 1.5, tolF: 2, zen: 57.5, th: 'otsu', thVal: 150 };
+  const S = Object.assign({}, DEFAULTS, store.get('laimeter.settings', {}));
+  let readings = store.get('laimeter.readings', []);
+  const saveSettings = () => store.set('laimeter.settings', S);
+  const saveReadings = () => store.set('laimeter.readings', readings);
+
+  let stream = null, zenith = null, holdStart = 0, lastCap = 0, pos = null, audio = null;
+  let current = null; // { readingId|null, mode, theta, example }
+
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  if (!inFrame || window.AndroidBridge) $('dlBtn').hidden = false;
+
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const hexRgb = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const fmt = (x, d) => (x == null || !isFinite(x)) ? '—' : x.toFixed(d);
+  const say = t => { $('msg').textContent = t || ''; };
+
+  // ---------- mode ----------
+  function setMode(m, quiet) {
+    S.mode = m; saveSettings();
+    $('modeNormal').setAttribute('aria-selected', m === 'normal');
+    $('modeFish').setAttribute('aria-selected', m === 'fisheye');
+    $('view').classList.toggle('fish', m === 'fisheye');
+    $('win').hidden = m !== 'normal';
+    $('fishGuide').hidden = m !== 'fisheye';
+    $('gLabel').textContent = m === 'normal' ? 'Camera zenith angle' : 'Tilt from straight up';
+    $('kZ').textContent = m === 'normal' ? 'Zenith θ' : 'Tilt';
+    $('kP').textContent = m === 'normal' ? 'Gap fraction P' : 'Gap fraction 0–74°';
+    $('ringDetails').hidden = m !== 'fisheye';
+    $('maskHint').textContent = m === 'normal'
+      ? 'Check the mask. If sunlit leaves show as sky, shoot again under overcast light or set a manual threshold in Settings.'
+      : 'Lay the phone flat, camera up. It beeps and captures when level. Check the mask for sunlit leaves counted as sky.';
+    buildGauge();
+    if (!quiet && !stream) showExample();
+  }
+  $('modeNormal').addEventListener('click', () => setMode('normal'));
+  $('modeFish').addEventListener('click', () => setMode('fisheye'));
+
+  // ---------- gauge ----------
+  function gaugeSpec() {
+    return S.mode === 'normal'
+      ? { min: 30, max: 90, lo: NORMAL_TARGET - S.tolN, hi: NORMAL_TARGET + S.tolN, ticks: [30, 45, 60, 75, 90] }
+      : { min: 0, max: 30, lo: 0, hi: S.tolF, ticks: [0, 10, 20, 30] };
+  }
+  const pct = (z, g) => Math.max(0, Math.min(100, (z - g.min) / (g.max - g.min) * 100));
+  function buildGauge() {
+    const g = gaugeSpec();
+    $('band').style.left = pct(g.lo, g) + '%';
+    $('band').style.width = (pct(g.hi, g) - pct(g.lo, g)) + '%';
+    $('ticks').textContent = '';
+    g.ticks.forEach(t => { const s = document.createElement('span'); s.textContent = t + '°'; $('ticks').append(s); });
+    if (zenith != null) updateNeedle();
+  }
+  function onTarget() {
+    if (zenith == null) return false;
+    return S.mode === 'normal' ? Math.abs(zenith - NORMAL_TARGET) <= S.tolN : zenith <= S.tolF;
+  }
+  function updateNeedle() {
+    const g = gaugeSpec(), nd = $('needle');
+    nd.hidden = false; nd.style.left = pct(zenith, g) + '%';
+    $('zVal').textContent = zenith.toFixed(1) + '°';
+    const on = onTarget();
+    let txt;
+    if (S.mode === 'normal') txt = on ? 'on target' : (zenith < NORMAL_TARGET ? 'tilt toward the horizon' : 'tilt toward the sky');
+    else txt = on ? 'level' : 'lay flatter';
+    $('zState').textContent = txt;
+    $('zState').className = 'state' + (on ? ' on' : '');
   }
 
-  // Tilt: zenith of the rear-camera axis from beta/gamma (device z-axis points out of the screen)
+  // Zenith of the rear-camera axis from beta/gamma
   function onOrient(e) {
     if (e.beta == null) return;
     const b = e.beta * Math.PI / 180, g = (e.gamma || 0) * Math.PI / 180;
     zenith = Math.acos(Math.max(-1, Math.min(1, -Math.cos(b) * Math.cos(g)))) * 180 / Math.PI;
-    $('zVal').textContent = zenith.toFixed(1) + '°';
-    const nd = $('needle'); nd.hidden = false; nd.style.left = pct(zenith) + '%';
-    const inBand = Math.abs(zenith - TARGET) <= TOL;
-    $('zState').textContent = inBand ? 'on target' : (zenith < TARGET ? 'tilt lower' : 'tilt higher');
-    $('zState').className = 'state' + (inBand ? ' on' : '');
+    updateNeedle();
     const now = performance.now();
-    if (stream && $('auto').checked && inBand) {
+    if (stream && S.auto && onTarget()) {
       if (!holdStart) holdStart = now;
       if (now - holdStart > 600 && now - lastCap > 2500) { captureLive(); holdStart = 0; }
     } else holdStart = 0;
   }
-
   async function startSensors() {
     try {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -315,85 +543,386 @@ td.ex{color:var(--muted);font-style:italic}
         if (p !== 'granted') { $('zState').textContent = 'tilt permission denied'; return; }
       }
       window.addEventListener('deviceorientation', onOrient);
-      setTimeout(() => { if (zenith == null) $('zState').textContent = 'no tilt sensor; enter zenith manually'; }, 1500);
+      setTimeout(() => { if (zenith == null) $('zState').textContent = 'no tilt sensor found'; }, 1500);
     } catch (e) { $('zState').textContent = 'tilt sensor unavailable'; }
   }
 
-  $('camBtn').addEventListener('click', async () => {
-    $('msg').textContent = '';
-    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; video.hidden = true; still.hidden = false;
-      $('camBtn').textContent = 'Start live camera'; $('capBtn').disabled = true; return; }
+  // ---------- location ----------
+  function startGps() {
+    if (!navigator.geolocation) { gpsStatus('bad', 'Location: not supported on this device'); return; }
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('nomedia');
+      navigator.geolocation.watchPosition(p => {
+        pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, alt: p.coords.altitude, t: Date.now() };
+        gpsStatus('ok', `${pos.lat.toFixed(5)}°, ${pos.lon.toFixed(5)}°  ±${Math.round(pos.acc)} m` + (pos.alt != null ? `  ·  ${Math.round(pos.alt)} m alt.` : ''));
+      }, err => {
+        gpsStatus('bad', err.code === 1 ? 'Location: permission refused. Readings will be saved without coordinates.' : 'Location: no GPS fix yet. Move to open sky for a moment.');
+      }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+    } catch (e) { gpsStatus('bad', 'Location: unavailable here'); }
+  }
+  function gpsStatus(cls, text) { $('gpsDot').className = 'dot ' + cls; $('gpsText').textContent = text; }
+  const freshPos = () => (pos && Date.now() - pos.t < 120000) ? pos : null;
+
+  // ---------- capture + analysis ----------
+  function drawSource(src, sw, sh) {
+    const scale = Math.min(1, MAXW / Math.max(sw, sh));
+    still.width = Math.round(sw * scale); still.height = Math.round(sh * scale);
+    sctx.drawImage(src, 0, 0, still.width, still.height);
+  }
+
+  function analyse(mode, theta) {
+    const w = still.width, h = still.height, data = sctx.getImageData(0, 0, w, h).data;
+    const opts = { manual: S.th === 'manual', thVal: +S.thVal, theta };
+    const r = mode === 'normal' ? C.normal(data, w, h, opts) : C.fisheye(data, w, h, opts);
+    if (!opts.manual) { S.thVal = r.T; syncThreshold(); }
+    drawMask(mode, data, w, h, r);
+    return r;
+  }
+
+  function drawMask(mode, data, w, h, r) {
+    const sky = hexRgb(css('--sky')), leaf = hexRgb(css('--accent')), bg = hexRgb(css('--bg'));
+    const N = 140, img = mctx.createImageData(N, N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      let x, y, inside = true;
+      if (mode === 'normal') { x = r.x0 + Math.floor(i / N * r.side); y = r.y0 + Math.floor(j / N * r.side); }
+      else {
+        const u = (i + .5) / N * 2 - 1, v = (j + .5) / N * 2 - 1;
+        inside = u * u + v * v <= (74.1 / 90) ** 2;
+        x = Math.floor(r.cx + u * r.R); y = Math.floor(r.cy + v * r.R);
+      }
+      const o = (j * N + i) * 4;
+      const c = !inside ? bg : (data[(y * w + x) * 4 + 2] > r.T ? sky : leaf);
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+    }
+    mctx.putImageData(img, 0, 0);
+    if (mode === 'fisheye') {
+      mctx.strokeStyle = 'rgba(255,255,255,.75)'; mctx.lineWidth = 1;
+      [12.3, 28.6, 43.4, 58.1].forEach(t => { mctx.beginPath(); mctx.arc(N / 2, N / 2, t / 90 * N / 2, 0, Math.PI * 2); mctx.stroke(); });
+    }
+  }
+
+  function showResult(mode, r, tiltOrTheta, example) {
+    $('sLai').textContent = fmt(r.lai, 2);
+    $('sP').textContent = fmt(r.P, 3);
+    $('sT').textContent = r.T;
+    $('sZ').textContent = tiltOrTheta == null ? '—' : tiltOrTheta.toFixed(1) + '°';
+    $('exNote').hidden = !example;
+    const rb = $('ringBody'); rb.textContent = '';
+    if (mode === 'fisheye' && r.rings) C.RINGS.forEach((rg, i) => {
+      const tr = document.createElement('tr');
+      [i + 1, `${rg.lo}–${rg.hi}°`, rg.c + '°', rg.w.toFixed(3), fmt(r.rings[i], 3)].forEach(t => { const td = document.createElement('td'); td.textContent = t; tr.append(td); });
+      rb.append(tr);
+    });
+  }
+
+  function record(source, tilt, loc) {
+    const mode = S.mode;
+    const theta = mode === 'normal' ? (source === 'camera' && zenith != null ? zenith : +S.zen) : null;
+    const r = analyse(mode, theta);
+    const rec = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      time: new Date().toISOString(), mode, source,
+      lai: r.lai, P: r.P, T: r.T, theta, tilt: mode === 'fisheye' ? tilt : null,
+      rings: r.rings || null,
+      lat: loc ? loc.lat : null, lon: loc ? loc.lon : null,
+      acc: loc && loc.acc != null ? loc.acc : null, alt: loc && loc.alt != null ? loc.alt : null
+    };
+    readings.push(rec); saveReadings();
+    current = { id: rec.id, mode, theta, example: false };
+    showResult(mode, r, mode === 'normal' ? theta : tilt, false);
+    renderAll();
+    return rec;
+  }
+
+  function captureLive() {
+    if (!stream || !video.videoWidth) return;
+    drawSource(video, video.videoWidth, video.videoHeight);
+    const loc = freshPos();
+    record('camera', S.mode === 'fisheye' ? zenith : null, loc);
+    lastCap = performance.now();
+    $('srcTag').textContent = 'Captured ' + new Date().toLocaleTimeString();
+    if (!loc) say('Saved without coordinates: no GPS fix yet.'); else say('');
+    if (S.beep) { beep(); try { navigator.vibrate && navigator.vibrate(80); } catch (e) {} }
+  }
+
+  function beep() {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = 1046; g.gain.setValueAtTime(.25, audio.currentTime); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .18);
+      o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + .2);
+    } catch (e) {}
+  }
+
+  $('camBtn').addEventListener('click', async () => {
+    say('');
+    try { if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop()); stream = null;
+      video.hidden = true; still.hidden = false;
+      $('camBtn').textContent = 'Start live camera'; $('capBtn').disabled = true; return;
+    }
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nomedia');
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false });
       video.srcObject = stream; video.hidden = false; still.hidden = true; await video.play();
       $('camBtn').textContent = 'Stop camera'; $('capBtn').disabled = false; $('srcTag').textContent = 'Live';
       startSensors();
     } catch (e) {
       stream = null;
-      $('msg').textContent = window.AndroidBridge
+      say(window.AndroidBridge
         ? 'Camera permission was refused. Allow it in Android Settings → Apps → LAI Meter → Permissions, then try again.'
-        : 'The live camera is not available here. Use "Take or upload photo", or run the page from an HTTPS address or the LAI Meter Android app for live capture with the tilt sensor.';
+        : 'The live camera is not available here. Use "Take or upload photo", or open the LAI Meter Android app for live capture with the tilt sensor.');
     }
   });
   $('capBtn').addEventListener('click', captureLive);
 
-  $('file').addEventListener('change', e => {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
+  $('file').addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+    let exif = null;
+    try { exif = C.exifGps(await f.arrayBuffer()); } catch (err) {}
     const img = new Image(), url = URL.createObjectURL(f);
     img.onload = () => {
       if (stream) $('camBtn').click();
       drawSource(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url);
-      record('photo', +$('zManual').value || TARGET);
-      $('srcTag').textContent = f.name.slice(0, 32);
+      const loc = exif || freshPos();
+      record('photo', null, loc);
+      $('srcTag').textContent = f.name;
+      say(exif ? 'Location taken from the photo.' : (loc ? 'The photo has no location, so the current GPS position was used.' : 'Saved without coordinates: the photo has no location and there is no GPS fix.'));
     };
-    img.onerror = () => { $('msg').textContent = 'That file could not be read as an image. Try a JPEG or PNG.'; };
-    img.src = url; e.target.value = '';
+    img.onerror = () => say('That file could not be read as an image. Try a JPEG or PNG.');
+    img.src = url;
   });
 
-  $('thMode').addEventListener('change', () => {
-    $('thVal').disabled = $('thMode').value === 'otsu';
-    if (lastImage && readings.length) reanalyseLast();
-  });
-  $('thVal').addEventListener('input', () => { $('thOut').textContent = $('thVal').value; if (lastImage && readings.length) reanalyseLast(); });
-  function reanalyseLast() {
-    const last = readings[readings.length - 1], r = analyse(last.theta);
-    Object.assign(last, r); showResult(r); renderTable();
+  // ---------- examples ----------
+  function rng(seed) { let s = seed; return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function leafColor(r) { const g = 70 + r() * 70 | 0; return `rgba(${g * .35 | 0},${g},${g * .3 | 0},${.75 + r() * .25})`; }
+  function exampleNormal() {
+    still.width = 540; still.height = 720; const r = rng(20261014);
+    const g = sctx.createLinearGradient(0, 0, 0, 720); g.addColorStop(0, '#8fbce8'); g.addColorStop(1, '#dce9f5');
+    sctx.fillStyle = g; sctx.fillRect(0, 0, 540, 720); sctx.strokeStyle = '#3b2e22';
+    for (let i = 0; i < 9; i++) { sctx.lineWidth = 3 + r() * 9; sctx.beginPath(); sctx.moveTo(r() * 540, 720); sctx.quadraticCurveTo(r() * 540, r() * 400 + 200, r() * 540, r() * 300); sctx.stroke(); }
+    for (let i = 0; i < 1400; i++) { const x = r() * 540, y = r() * 720, s = 6 + r() * 16; sctx.fillStyle = leafColor(r); sctx.beginPath(); sctx.ellipse(x, y, s, s * (.4 + r() * .3), r() * Math.PI, 0, Math.PI * 2); sctx.fill(); }
+  }
+  function exampleFisheye() {
+    const N = 720, R = N / 2, r = rng(7);
+    still.width = N; still.height = N;
+    sctx.fillStyle = '#000'; sctx.fillRect(0, 0, N, N);
+    sctx.save(); sctx.beginPath(); sctx.arc(R, R, R, 0, Math.PI * 2); sctx.clip();
+    const g = sctx.createRadialGradient(R, R, 0, R, R, R); g.addColorStop(0, '#9cc6ee'); g.addColorStop(1, '#e2edf7');
+    sctx.fillStyle = g; sctx.fillRect(0, 0, N, N);
+    sctx.strokeStyle = '#3b2e22';
+    for (let i = 0; i < 12; i++) { const a = r() * Math.PI * 2; sctx.lineWidth = 4 + r() * 8; sctx.beginPath(); sctx.moveTo(R + Math.cos(a) * R, R + Math.sin(a) * R); sctx.lineTo(R + Math.cos(a + .3) * R * (.2 + r() * .4), R + Math.sin(a + .3) * R * (.2 + r() * .4)); sctx.stroke(); }
+    for (let i = 0; i < 2600; i++) {
+      const a = r() * Math.PI * 2, d = R * Math.pow(r(), .55), x = R + Math.cos(a) * d, y = R + Math.sin(a) * d, s = 5 + r() * 12;
+      sctx.fillStyle = leafColor(r); sctx.beginPath(); sctx.ellipse(x, y, s, s * (.4 + r() * .3), r() * Math.PI, 0, Math.PI * 2); sctx.fill();
+    }
+    sctx.restore();
+  }
+  function showExample() {
+    still.hidden = false; video.hidden = true;
+    const mode = S.mode;
+    if (mode === 'normal') exampleNormal(); else exampleFisheye();
+    const theta = mode === 'normal' ? NORMAL_TARGET : null;
+    const r = analyse(mode, theta);
+    current = { id: null, mode, theta, example: true };
+    showResult(mode, r, mode === 'normal' ? NORMAL_TARGET : 0, true);
+    $('srcTag').textContent = 'Example canopy image';
+  }
+
+  // Re-run the threshold on the image currently shown
+  function reanalyse() {
+    if (!current) return;
+    const r = analyse(current.mode, current.theta);
+    if (current.id) {
+      const rec = readings.find(x => x.id === current.id);
+      if (rec) { Object.assign(rec, { lai: r.lai, P: r.P, T: r.T, rings: r.rings || null }); saveReadings(); renderAll(); }
+      showResult(current.mode, r, current.mode === 'normal' ? current.theta : (rec ? rec.tilt : null), false);
+    } else showResult(current.mode, r, current.mode === 'normal' ? current.theta : 0, true);
+  }
+
+  // ---------- readings table + summary ----------
+  const modeLabel = m => m === 'normal' ? 'Normal' : 'Fisheye';
+  function renderAll() { renderTable(); renderSummary(); if (map) renderMap(); }
+
+  function renderTable() {
+    const tb = $('tbody'); tb.textContent = '';
+    if (!readings.length) {
+      const tr = document.createElement('tr'), td = document.createElement('td');
+      td.colSpan = 10; td.className = 'empty'; td.style.textAlign = 'left'; td.style.whiteSpace = 'normal';
+      td.textContent = 'No readings yet. Capture or upload a photo to start.'; tr.append(td); tb.append(tr); return;
+    }
+    readings.forEach((r, i) => {
+      const tr = document.createElement('tr'), d = new Date(r.time);
+      const cells = [i + 1, d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        modeLabel(r.mode), fmt(r.lai, 2), fmt(r.P, 3), fmt(r.lat, 5), fmt(r.lon, 5),
+        r.acc == null ? '—' : Math.round(r.acc), r.alt == null ? '—' : Math.round(r.alt)];
+      cells.forEach(c => { const td = document.createElement('td'); td.textContent = c; tr.append(td); });
+      const td = document.createElement('td'); td.className = 'del';
+      const b = document.createElement('button'); b.textContent = '×'; b.setAttribute('aria-label', 'Delete reading ' + (i + 1));
+      b.addEventListener('click', () => {
+        if (b.dataset.armed) { readings = readings.filter(x => x.id !== r.id); saveReadings(); renderAll(); }
+        else { b.dataset.armed = '1'; b.textContent = 'Delete?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = '×'; } }, 3000); }
+      });
+      td.append(b); tr.append(td); tb.append(tr);
+    });
+  }
+
+  function renderSummary() {
+    const s = $('summary'); s.textContent = '';
+    if (!readings.length) return;
+    ['normal', 'fisheye'].forEach(m => {
+      const rs = readings.filter(r => r.mode === m && isFinite(r.lai));
+      if (!rs.length) return;
+      const n = rs.length, mean = rs.reduce((a, r) => a + r.lai, 0) / n;
+      const sd = n > 1 ? Math.sqrt(rs.reduce((a, r) => a + (r.lai - mean) ** 2, 0) / (n - 1)) : null;
+      const line = document.createElement('div');
+      const parts = [[modeLabel(m) + ':', ''], ['n =', n], ['mean LAI', mean.toFixed(2)], ['SD', sd == null ? '—' : sd.toFixed(2)]];
+      if (m === 'normal' && n > 1) {
+        const mlnP = rs.reduce((a, r) => a + Math.log(r.P), 0) / n, mP = rs.reduce((a, r) => a + r.P, 0) / n;
+        parts.push(['clumping Ω', (Math.log(mP) / mlnP).toFixed(2)]);
+      }
+      if (m === 'fisheye' && n > 1) {
+        const avg = C.RINGS.map((_, i) => { const v = rs.map(r => r.rings && r.rings[i]).filter(isFinite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; });
+        parts.push(['LI-COR-style LAI', fmt(C.laiFromRings(avg), 2)]);
+      }
+      parts.forEach(([k, v], j) => {
+        if (j === 0) { const b = document.createElement('b'); b.textContent = k + ' '; line.append(b); return; }
+        line.append((j > 1 ? '  ·  ' : '') + k + ' ');
+        const b = document.createElement('b'); b.textContent = v; line.append(b);
+      });
+      s.append(line);
+    });
+  }
+
+  function csv() {
+    const head = 'n,time,mode,source,lai,gap_fraction,blue_threshold,zenith_deg,tilt_deg,P_ring1,P_ring2,P_ring3,P_ring4,P_ring5,lat,lon,accuracy_m,altitude_m';
+    const v = (x, d) => (x == null || !isFinite(x)) ? '' : x.toFixed(d);
+    return [head, ...readings.map((r, i) => [i + 1, r.time, r.mode, r.source, v(r.lai, 3), v(r.P, 5), r.T, v(r.theta, 2), v(r.tilt, 2),
+      ...[0, 1, 2, 3, 4].map(k => r.rings ? v(r.rings[k], 5) : ''), v(r.lat, 6), v(r.lon, 6), v(r.acc, 1), v(r.alt, 1)].join(','))].join('\n');
   }
 
   $('copyBtn').addEventListener('click', () => {
     const text = csv(), box = $('csvBox');
-    const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); $('msg').textContent = 'Clipboard blocked. The CSV is selected below; copy it manually.'; };
+    const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); say('Clipboard blocked. The CSV is selected below; copy it manually.'); };
     try { navigator.clipboard.writeText(text).then(() => { $('copyBtn').textContent = 'Copied'; setTimeout(() => $('copyBtn').textContent = 'Copy CSV', 1500); }, fallback); }
     catch (e) { fallback(); }
   });
   $('dlBtn').addEventListener('click', () => {
     if (window.AndroidBridge) { window.AndroidBridge.saveCsv(csv()); return; }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv()], {type:'text/csv'}));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv()], { type: 'text/csv' }));
     a.download = 'lai_readings.csv'; a.click();
   });
-  $('clearBtn').addEventListener('click', () => { readings = []; renderTable();
-    ['sLai','sP','sT','sZ'].forEach(id => $(id).textContent = '—'); mctx.clearRect(0,0,140,140); });
+  $('clearBtn').addEventListener('click', () => {
+    const b = $('clearBtn');
+    if (!readings.length) return;
+    if (b.dataset.armed) { readings = []; saveReadings(); renderAll(); delete b.dataset.armed; b.textContent = 'Clear readings'; say('All readings cleared.'); }
+    else { b.dataset.armed = '1'; b.textContent = 'Tap again to clear all'; setTimeout(() => { delete b.dataset.armed; b.textContent = 'Clear readings'; }, 3000); }
+  });
 
-  // Example: synthetic upward canopy photo so the page opens in a working state
-  function exampleCanopy() {
-    still.width = 540; still.height = 720;
-    let s = 20261014; const rnd = () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-    const g = sctx.createLinearGradient(0, 0, 0, 720); g.addColorStop(0, '#8fbce8'); g.addColorStop(1, '#dce9f5');
-    sctx.fillStyle = g; sctx.fillRect(0, 0, 540, 720);
-    sctx.strokeStyle = '#3b2e22';
-    for (let i = 0; i < 9; i++) { sctx.lineWidth = 3 + rnd() * 9; sctx.beginPath();
-      sctx.moveTo(rnd() * 540, 720); sctx.quadraticCurveTo(rnd() * 540, rnd() * 400 + 200, rnd() * 540, rnd() * 300); sctx.stroke(); }
-    for (let i = 0; i < 1400; i++) {
-      const x = rnd() * 540, y = rnd() * 720, r = 6 + rnd() * 16, gr = 70 + rnd() * 70 | 0;
-      sctx.fillStyle = `rgba(${gr * .35 | 0},${gr},${gr * .3 | 0},${.75 + rnd() * .25})`;
-      sctx.beginPath(); sctx.ellipse(x, y, r, r * (.4 + rnd() * .3), rnd() * Math.PI, 0, Math.PI * 2); sctx.fill();
+  // ---------- map ----------
+  let map = null, markers = null;
+  const STOPS = [[0, [242, 232, 160]], [2, [166, 207, 106]], [4, [79, 154, 72]], [6, [29, 90, 44]]];
+  function laiColor(v) {
+    v = Math.max(0, Math.min(6, v || 0));
+    for (let i = 1; i < STOPS.length; i++) if (v <= STOPS[i][0]) {
+      const [a, ca] = STOPS[i - 1], [b, cb] = STOPS[i], t = (v - a) / (b - a);
+      return 'rgb(' + ca.map((c, k) => Math.round(c + (cb[k] - c) * t)).join(',') + ')';
     }
-    lastImage = true;
-    record('example', TARGET, true);
+    return 'rgb(29,90,44)';
   }
-  exampleCanopy();
+  function initMap() {
+    if (typeof L === 'undefined') { $('mapNote').textContent = 'The map could not load. Check the internet connection and open Map again.'; return false; }
+    map = L.map('map', { zoomControl: true });
+    const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' });
+    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+    sat.addTo(map);
+    L.control.layers({ 'Satellite': sat, 'Street map': street }, null, { position: 'topright' }).addTo(map);
+    markers = L.layerGroup().addTo(map);
+    const legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = () => {
+      const d = L.DomUtil.create('div', 'lai-legend');
+      d.innerHTML = '<b>LAI</b><div class="bar"></div><div class="lb"><span>0</span><span>2</span><span>4</span><span>6+</span></div>';
+      return d;
+    };
+    legend.addTo(map);
+    map.setView([22.4, 87.3], 9);
+    return true;
+  }
+  function renderMap() {
+    markers.clearLayers();
+    const pts = readings.filter(r => r.lat != null && r.lon != null);
+    $('mapNote').textContent = pts.length
+      ? `${pts.length} of ${readings.length} readings have coordinates. Tap a point for details.`
+      : 'No readings with coordinates yet. Readings appear here once GPS is on.';
+    pts.forEach(r => {
+      const i = readings.indexOf(r) + 1;
+      const m = L.circleMarker([r.lat, r.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: laiColor(r.lai), fillOpacity: .95 });
+      const el = document.createElement('div');
+      const add = (k, v) => { const p = document.createElement('div'); const b = document.createElement('b'); b.textContent = k + ': '; p.append(b, v); el.append(p); };
+      add('Reading', '#' + i + ' · ' + modeLabel(r.mode));
+      add('LAI', fmt(r.lai, 2)); add('Gap fraction', fmt(r.P, 3));
+      add('Time', new Date(r.time).toLocaleString());
+      add('Position', r.lat.toFixed(5) + ', ' + r.lon.toFixed(5) + (r.acc != null ? ' ±' + Math.round(r.acc) + ' m' : ''));
+      if (r.alt != null) add('Altitude', Math.round(r.alt) + ' m');
+      m.bindPopup(el); m.bindTooltip(fmt(r.lai, 2), { permanent: pts.length <= 40, direction: 'top', offset: [0, -8] });
+      markers.addLayer(m);
+    });
+    if (pts.length === 1) map.setView([pts[0].lat, pts[0].lon], 17);
+    else if (pts.length > 1) map.fitBounds(L.latLngBounds(pts.map(r => [r.lat, r.lon])), { padding: [30, 30], maxZoom: 18 });
+  }
+  function showView(v) {
+    $('vTable').setAttribute('aria-pressed', v === 'table');
+    $('vMap').setAttribute('aria-pressed', v === 'map');
+    $('tablePane').hidden = v !== 'table'; $('mapPane').hidden = v !== 'map';
+    if (v === 'map') {
+      if (!map && !initMap()) return;
+      setTimeout(() => { map.invalidateSize(); renderMap(); }, 50);
+    }
+  }
+  $('vTable').addEventListener('click', () => showView('table'));
+  $('vMap').addEventListener('click', () => showView('map'));
+
+  // ---------- menu sheet ----------
+  const pages = { pMenu: 'Menu', pMethod: 'How the number is computed', pSettings: 'Settings' };
+  let lastFocus = null;
+  function go(id) {
+    Object.keys(pages).forEach(p => $(p).hidden = p !== id);
+    $('sheetTitle').textContent = pages[id];
+    $('sheetBack').hidden = id === 'pMenu';
+    $('sheet').scrollTop = 0;
+  }
+  $('menuBtn').addEventListener('click', () => { lastFocus = document.activeElement; $('sheet').hidden = false; go('pMenu'); $('sheetClose').focus(); });
+  $('sheetClose').addEventListener('click', closeSheet);
+  $('sheetBack').addEventListener('click', () => go('pMenu'));
+  document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+  function closeSheet() { $('sheet').hidden = true; if (lastFocus) lastFocus.focus(); }
+
+  // ---------- settings ----------
+  function syncThreshold() {
+    $('setThVal').value = S.thVal; $('thOut').textContent = S.thVal;
+    $('setThVal').disabled = S.th !== 'manual';
+  }
+  function loadSettingsForm() {
+    $('setAuto').checked = S.auto; $('setBeep').checked = S.beep;
+    $('setTolN').value = S.tolN; $('setTolF').value = S.tolF; $('setZen').value = S.zen;
+    $('setTh').value = S.th; syncThreshold();
+  }
+  const num = (el, lo, hi, d) => { const v = parseFloat(el.value); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+  $('setAuto').addEventListener('change', e => { S.auto = e.target.checked; saveSettings(); });
+  $('setBeep').addEventListener('change', e => { S.beep = e.target.checked; saveSettings(); });
+  $('setTolN').addEventListener('change', e => { S.tolN = num(e.target, .5, 5, 1.5); e.target.value = S.tolN; saveSettings(); buildGauge(); });
+  $('setTolF').addEventListener('change', e => { S.tolF = num(e.target, .5, 8, 2); e.target.value = S.tolF; saveSettings(); buildGauge(); });
+  $('setZen').addEventListener('change', e => { S.zen = num(e.target, 10, 80, 57.5); e.target.value = S.zen; saveSettings(); });
+  $('setTh').addEventListener('change', e => { S.th = e.target.value; saveSettings(); syncThreshold(); reanalyse(); });
+  $('setThVal').addEventListener('input', e => { S.thVal = +e.target.value; $('thOut').textContent = S.thVal; saveSettings(); reanalyse(); });
+
+  // ---------- start ----------
+  loadSettingsForm();
+  setMode(S.mode, true);
+  showExample();
+  renderAll();
+  startGps();
 })();
 </script>
 </body></html>

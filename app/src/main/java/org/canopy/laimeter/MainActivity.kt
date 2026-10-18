@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.WindowManager
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -35,6 +36,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private var pendingRequest: PermissionRequest? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var geoCallback: GeolocationPermissions.Callback? = null
+    private var geoOrigin: String? = null
+
+    private val locationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val granted = result.values.any { it }
+            geoCallback?.invoke(geoOrigin, granted, false)
+            geoCallback = null
+            geoOrigin = null
+        }
 
     private val cameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -65,6 +76,8 @@ class MainActivity : ComponentActivity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.mediaPlaybackRequiresUserGesture = false
+        @Suppress("DEPRECATION")
+        web.settings.setGeolocationEnabled(true)
         web.addJavascriptInterface(Bridge(), "AndroidBridge")
 
         web.webViewClient = object : WebViewClient() {
@@ -89,6 +102,29 @@ class MainActivity : ComponentActivity() {
                     } else {
                         request.deny()
                     }
+                }
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String, callback: GeolocationPermissions.Callback
+            ) {
+                val fine = ContextCompat.checkSelfPermission(
+                    this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                val coarse = ContextCompat.checkSelfPermission(
+                    this@MainActivity, Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+                if (fine || coarse) {
+                    callback.invoke(origin, true, false)
+                } else {
+                    geoCallback = callback
+                    geoOrigin = origin
+                    locationPermission.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
                 }
             }
 
